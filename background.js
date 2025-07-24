@@ -1,77 +1,61 @@
-// Background script for Reddit Comment Blocker
+// background.js – Reddit edition
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: "blockUser",
-    title: "Block this user's comments",
+    title: "Block this Reddit user’s comments",
     contexts: ["link"],
     documentUrlPatterns: ["*://*.reddit.com/*"],
-    targetUrlPatterns: ["*://*.reddit.com/user/*", "*://*.reddit.com/u/*"]
+    targetUrlPatterns: ["*://*.reddit.com/user/*"]
   });
 });
 
-// Handle context menu clicks
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  const match = info.linkUrl?.match(/reddit\.com\/(?:user|u)\/([^/?]+)/);
-  if (match) {
-    const username = match[1];
-    chrome.storage.sync.get(["blockedUsers"], (result) => {
-      const blockedUsers = result.blockedUsers || [];
-      if (!blockedUsers.includes(username)) {
-        blockedUsers.push(username);
-        chrome.storage.sync.set({ blockedUsers }, () => {
-          chrome.tabs.sendMessage(tab.id, { action: "userBlocked", username });
-        });
-      }
-    });
-  }
+  const match = info.linkUrl?.match(/reddit\.com\/user\/([^/?]+)/i);
+  if (!match) return;
+
+  const username = match[1].toLowerCase();
+  chrome.storage.sync.get(["blockedUsers"], (res) => {
+    const blocked = res.blockedUsers || [];
+    if (!blocked.includes(username)) {
+      blocked.push(username);
+      chrome.storage.sync.set({ blockedUsers: blocked }, () => {
+        chrome.tabs.sendMessage(tab.id, { action: "userBlocked", username });
+      });
+    }
+  });
 });
 
-// Handle messages from content script and popup
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  const { action } = request;
-  
-  if (action === "getBlockedUsers") {
-    chrome.storage.sync.get(["blockedUsers"], (result) => {
-      sendResponse({ blockedUsers: result.blockedUsers || [] });
-    });
+chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
+  if (req.action === "getBlockedUsers") {
+    chrome.storage.sync.get(["blockedUsers"], (r) =>
+      sendResponse({ blockedUsers: r.blockedUsers || [] })
+    );
     return true;
   }
-  
-  if (action === "addBlockedUser" || action === "removeBlockedUser") {
-    chrome.storage.sync.get(["blockedUsers"], (result) => {
-      const blockedUsers = result.blockedUsers || [];
-      const username = request.username.trim();
-      const index = blockedUsers.indexOf(username);
-      
-      let success = false;
-      let reason = "";
-      
-      if (action === "addBlockedUser") {
-        if (index === -1) {
-          blockedUsers.push(username);
-          success = true;
-        } else {
-          reason = "User already blocked";
-        }
-      } else { // removeBlockedUser
-        if (index > -1) {
-          blockedUsers.splice(index, 1);
-          success = true;
-        } else {
-          reason = "User not found";
-        }
-      }
-      
-      if (success) {
-        chrome.storage.sync.set({ blockedUsers }, () => {
-          sendResponse({ success: true });
-        });
+
+  if (req.action === "addBlockedUser" || req.action === "removeBlockedUser") {
+    chrome.storage.sync.get(["blockedUsers"], (r) => {
+      const list = r.blockedUsers || [];
+      const user = req.username.toLowerCase().trim();
+      const idx = list.indexOf(user);
+
+      let ok = false, reason = "";
+      if (req.action === "addBlockedUser") {
+        if (idx === -1) {
+          list.push(user);
+          ok = true;
+        } else reason = "User already blocked";
       } else {
-        sendResponse({ success: false, reason });
+        if (idx > -1) {
+          list.splice(idx, 1);
+          ok = true;
+        } else reason = "User not found";
       }
+
+      if (ok) {
+        chrome.storage.sync.set({ blockedUsers: list }, () => sendResponse({ success: true }));
+      } else sendResponse({ success: false, reason });
     });
     return true;
   }
-  
-  sendResponse({ success: false, reason: "Unknown action" });
 });
