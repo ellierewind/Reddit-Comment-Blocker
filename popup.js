@@ -1,4 +1,4 @@
-// Optimized Popup script for YouTube Comment Blocker
+// Optimized Popup script for Reddit Comment Blocker
 document.addEventListener('DOMContentLoaded', function() {
   const elements = {
     usernameInput: document.getElementById('usernameInput'),
@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   };
   
-  const isYouTubePage = (tab) => tab?.url?.includes('youtube.com');
+  const isRedditPage = (tab) => tab?.url?.includes('reddit.com');
   const escapeHtml = (text) => { 
     const div = document.createElement('div');
     div.textContent = text;
@@ -205,7 +205,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         getCurrentTab((tab) => {
-          if (isYouTubePage(tab)) {
+          if (isRedditPage(tab)) {
             sendMessageToContentScript(tab.id, { 
               action: "settingsChanged",
               showPlaceholders: showPlaceholders
@@ -229,7 +229,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       
       const exportData = {
-        extension: "YouTube Comment Blocker",
+        extension: "Reddit Comment Blocker",
         version: "1.0",
         exportDate: new Date().toISOString(),
         blockedUsers
@@ -240,7 +240,7 @@ document.addEventListener('DOMContentLoaded', function() {
       
       const a = document.createElement('a');
       a.href = url;
-      a.download = `youtube-blocked-users-${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `reddit-blocked-users-${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -309,7 +309,7 @@ document.addEventListener('DOMContentLoaded', function() {
               loadBlockedUsers();
               
               getCurrentTab((tab) => {
-                if (isYouTubePage(tab)) {
+                if (isRedditPage(tab)) {
                   sendMessageToContentScript(tab.id, { action: "refreshBlocking" });
                 }
               });
@@ -369,7 +369,7 @@ document.addEventListener('DOMContentLoaded', function() {
         loadBlockedUsers();
         
         getCurrentTab((tab) => {
-          if (isYouTubePage(tab)) {
+          if (isRedditPage(tab)) {
             sendMessageToContentScript(tab.id, { action: "refreshBlocking" });
           }
         });
@@ -392,7 +392,7 @@ document.addEventListener('DOMContentLoaded', function() {
           loadBlockedUsers();
           
           getCurrentTab((tab) => {
-            if (isYouTubePage(tab)) {
+            if (isRedditPage(tab)) {
               sendMessageToContentScript(tab.id, { action: "refreshBlocking" });
             }
           });

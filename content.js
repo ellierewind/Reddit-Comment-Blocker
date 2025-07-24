@@ -1,81 +1,72 @@
-// content.js – Reddit edition
+// content.js – instant on-page blocking
 let blockedUsers = [];
 let observer = null;
-let showPlaceholders = true;
 
 const loadData = () =>
-  new Promise((resolve) => {
-    chrome.runtime.sendMessage({ action: "getBlockedUsers" }, (res) => {
-      blockedUsers = res?.blockedUsers || [];
-      chrome.storage.sync.get(["showPlaceholders"], (r) => {
-        showPlaceholders = r.showPlaceholders !== false;
-        resolve();
-      });
+  new Promise(r => {
+    chrome.runtime.sendMessage({ action: 'getBlockedUsers' }, res => {
+      blockedUsers = res?.blockedUsers?.map(u => u.toLowerCase()) || [];
+      r();
     });
   });
 
-const extractUsername = (el) => {
-  const authorEl = el.querySelector('a[href*="/user/"]');
-  if (!authorEl) return null;
-  const m = authorEl.href.match(/reddit\.com\/user\/([^/?]+)/i);
+const getAuthor = cmt => {
+  const a = cmt.querySelector('a[href*="/user/"]');
+  if (!a) return null;
+  const m = a.href.match(/reddit\.com\/user\/([^/?]+)/i);
   return m ? m[1].toLowerCase() : null;
 };
 
-const addPlaceholder = (el, text) => {
-  if (!showPlaceholders || el.nextElementSibling?.classList.contains('blocked-placeholder')) return;
-  const p = document.createElement('div');
-  p.className = 'blocked-placeholder';
-  p.textContent = text;
-  el.parentNode.insertBefore(p, el.nextSibling);
+// delete every visual slot inside a <shreddit-comment>
+const deleteComment = cmt => {
+  cmt.querySelector('[slot="commentAvatar"]')?.remove();
+  cmt.querySelector('[slot="commentMeta"]')?.remove();
+  cmt.querySelector('[slot="comment"]')?.remove();
+  cmt.querySelector('[slot="actionRow"]')?.remove();
 };
 
-const hideBlocked = () => {
-  document.querySelectorAll('shreddit-comment:not(.blocked-processed)').forEach(cmt => {
-    cmt.classList.add('blocked-processed');
-    const user = extractUsername(cmt);
-    if (!user || !blockedUsers.includes(user)) return;
+// hide or un-hide comments based on current blocked list
+const refreshBlocking = async () => {
+  await loadData();
+  document.querySelectorAll('shreddit-comment').forEach(cmt => {
+    const user = getAuthor(cmt);
+    const shouldHide = user && blockedUsers.includes(user);
 
-    cmt.classList.add('blocked-comment');
-    cmt.style.display = 'none';
-    addPlaceholder(cmt, `Comment from blocked user “${user}” hidden`);
+    // restore first (in case user was un-blocked)
+    [...cmt.children].forEach(slot => {
+      if (slot.slot) slot.style.removeProperty('display');
+    });
+
+    if (shouldHide) {
+      deleteComment(cmt);
+    }
   });
 };
 
-const refresh = () => {
-  document.querySelectorAll('.blocked-processed').forEach(el => el.classList.remove('blocked-processed'));
-  document.querySelectorAll('.blocked-placeholder').forEach(el => el.remove());
-  document.querySelectorAll('.blocked-comment').forEach(el => (el.style.display = ''));
-  hideBlocked();
-};
-
+// initial run + DOM observer
 const init = async () => {
   if (!location.hostname.includes('reddit.com')) return;
-  await loadData();
-  hideBlocked();
+  await refreshBlocking();
 
   if (observer) observer.disconnect();
-  observer = new MutationObserver(() => setTimeout(hideBlocked, 100));
+  observer = new MutationObserver(() => setTimeout(refreshBlocking, 150));
   observer.observe(document.body, { childList: true, subtree: true });
 };
 
-chrome.runtime.onMessage.addListener((req) => {
-  if (req.action === "userBlocked" || req.action === "refreshBlocking") {
-    loadData().then(refresh);
-  }
-  if (req.action === "settingsChanged") {
-    showPlaceholders = req.showPlaceholders;
-    showPlaceholders ? refresh() : document.querySelectorAll('.blocked-placeholder').forEach(el => (el.style.display = 'none'));
-  }
+// listen for messages from background/popup
+chrome.runtime.onMessage.addListener(msg => {
+  if (msg.action === 'refreshBlocking') refreshBlocking();
 });
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
 } else init();
 
-let url = location.href;
+// handle SPA navigation
+let lastUrl = location.href;
 new MutationObserver(() => {
-  if (location.href !== url) {
-    url = location.href;
+  if (location.href !== lastUrl) {
+    lastUrl = location.href;
     setTimeout(init, 1000);
   }
 }).observe(document, { childList: true, subtree: true });

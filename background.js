@@ -59,3 +59,12 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
     return true;
   }
 });
+
+// Broadcast “refreshBlocking” to every Reddit tab whenever the list changes
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'sync' && changes.blockedUsers) {
+    chrome.tabs.query({ url: '*://*.reddit.com/*' }, tabs => {
+      tabs.forEach(tab => chrome.tabs.sendMessage(tab.id, { action: 'refreshBlocking' }));
+    });
+  }
+});
