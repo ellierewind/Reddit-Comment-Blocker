@@ -5,7 +5,6 @@ document.addEventListener('DOMContentLoaded', function() {
     addBtn: document.getElementById('addBtn'),
     userList: document.getElementById('userList'),
     userCount: document.getElementById('userCount'),
-    showPlaceholdersToggle: document.getElementById('showPlaceholders'),
     exportBtn: document.getElementById('exportBtn'),
     importBtn: document.getElementById('importBtn'),
     fileInput: document.getElementById('fileInput')
@@ -178,47 +177,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   };
   
-  const loadSettings = () => {
-    try {
-      chrome.storage.sync.get(["showPlaceholders"], (result) => {
-        if (chrome.runtime.lastError) {
-          console.warn('Failed to load settings:', chrome.runtime.lastError.message);
-          elements.showPlaceholdersToggle.checked = true;
-          return;
-        }
-        elements.showPlaceholdersToggle.checked = result.showPlaceholders !== false;
-      });
-    } catch (error) {
-      console.warn('Failed to load settings:', error);
-      elements.showPlaceholdersToggle.checked = true;
-    }
-  };
-  
-  const saveSettings = () => {
-    const showPlaceholders = elements.showPlaceholdersToggle.checked;
-    
-    try {
-      chrome.storage.sync.set({ showPlaceholders }, () => {
-        if (chrome.runtime.lastError) {
-          console.warn('Failed to save settings:', chrome.runtime.lastError.message);
-          return;
-        }
-        
-        getCurrentTab((tab) => {
-          if (isRedditPage(tab)) {
-            sendMessageToContentScript(tab.id, { 
-              action: "settingsChanged",
-              showPlaceholders: showPlaceholders
-            });
-          }
-        });
-      });
-    } catch (error) {
-      console.warn('Failed to save settings:', error);
-    }
-  };
-  
-// Export/Import functions
+  // Export/Import functions
   const exportBlockedUsers = () => {
     sendMessageSafely({ action: "getBlockedUsers" }, (response) => {
       const blockedUsers = response?.blockedUsers || [];
@@ -408,7 +367,6 @@ document.addEventListener('DOMContentLoaded', function() {
   elements.usernameInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') addUser(elements.usernameInput.value);
   });
-  elements.showPlaceholdersToggle.addEventListener('change', saveSettings);
   elements.exportBtn.addEventListener('click', exportBlockedUsers);
   elements.importBtn.addEventListener('click', () => elements.fileInput.click());
   elements.fileInput.addEventListener('change', (e) => {
@@ -421,6 +379,5 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Initialize
   loadBlockedUsers();
-  loadSettings();
   createCustomModal();
 });
