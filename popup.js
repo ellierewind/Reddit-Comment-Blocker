@@ -2,12 +2,13 @@
 document.addEventListener('DOMContentLoaded', function() {
   const elements = {
     usernameInput: document.getElementById('usernameInput'),
-    addBtn: document.getElementById('addBtn'),
-    userList: document.getElementById('userList'),
-    userCount: document.getElementById('userCount'),
+    addUserBtn: document.getElementById('addUserBtn'), // Changed from addBtn
+    blockedUsersList: document.getElementById('blockedUsersList'), // Changed from userList
+    userCount: document.getElementById('userCount'), // This span is removed from HTML, but keeping for now if it's used elsewhere. Will remove if not.
     exportBtn: document.getElementById('exportBtn'),
     importBtn: document.getElementById('importBtn'),
-    fileInput: document.getElementById('fileInput')
+    fileInput: document.getElementById('fileInput'),
+    notification: document.getElementById('notification') // Added notification element
   };
   
   // Helper functions
@@ -63,82 +64,44 @@ document.addEventListener('DOMContentLoaded', function() {
     return div.innerHTML;
   };
   
-  const showMessage = (text, type = 'info') => {
-    const existingMsg = document.querySelector('.temp-message');
-    if (existingMsg) existingMsg.remove();
+  // Refactored showMessage to use the new notification element
+  const showMessage = (message, type = 'info') => {
+    const notification = elements.notification;
+    notification.textContent = message;
+    // Remove previous type classes and add the new one
+    notification.className = `notification ${type}`; 
+    notification.classList.remove('hidden'); // Ensure it's visible
     
-    const colors = {
-      success: 'background: #d4edda; color: #155724; border: 1px solid #c3e6cb;',
-      error: 'background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;',
-      info: 'background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb;'
-    };
-    
-    const msg = document.createElement('div');
-    msg.className = 'temp-message';
-    msg.textContent = text;
-    msg.style.cssText = `
-      position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
-      padding: 8px 12px; border-radius: 4px; font-size: 12px; font-weight: 500;
-      z-index: 1000; ${colors[type] || colors.info}
-    `;
-    
-    document.body.appendChild(msg);
-    setTimeout(() => msg.remove(), 3000);
+    setTimeout(() => {
+      notification.classList.add('hidden'); // Hide after 3 seconds
+    }, 3000);
   };
   
-  // Custom modal functions
-  const createCustomModal = () => {
-    if (document.getElementById('customModal')) return;
-    
-    const modalHtml = `
-      <div id="customModal" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
-          <div class="modal-header"><h3 id="modalTitle">Confirm Action</h3></div>
-          <div class="modal-body"><p id="modalMessage">Are you sure?</p></div>
-          <div class="modal-footer">
-            <button id="modalCancel" class="modal-btn modal-btn-cancel">Cancel</button>
-            <button id="modalConfirm" class="modal-btn modal-btn-confirm">Confirm</button>
-          </div>
-        </div>
-      </div>
-    `;
-    
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    
-    // Add modal styles
-    const modalStyles = `
-      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); display: flex; justify-content: center; align-items: center; z-index: 10000; backdrop-filter: blur(2px); }
-      .modal-content { background: white; border-radius: 8px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); min-width: 280px; max-width: 90%; transform: scale(0.9); animation: modalShow 0.2s ease forwards; }
-      @keyframes modalShow { to { transform: scale(1); } }
-      .modal-header { padding: 16px 20px; border-bottom: 1px solid #eee; background: #ff6e6e; color: white; border-radius: 8px 8px 0 0; }
-      .modal-header h3 { margin: 0; font-size: 16px; font-weight: 500; }
-      .modal-body { padding: 20px; text-align: center; }
-      .modal-body p { margin: 0; font-size: 14px; color: #333; line-height: 1.4; }
-      .modal-footer { padding: 12px 20px; display: flex; gap: 10px; justify-content: flex-end; border-top: 1px solid #eee; background: #f9f9f9; border-radius: 0 0 8px 8px; }
-      .modal-btn { padding: 8px 16px; border: none; border-radius: 4px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; min-width: 70px; }
-      .modal-btn-cancel { background: #6c757d; color: white; }
-      .modal-btn-cancel:hover { background: #5a6268; }
-      .modal-btn-confirm { background: #ff6e6e; color: white; }
-      .modal-btn-confirm:hover { background: #ff5252; }
-      .modal-btn:active { transform: translateY(1px); }
-    `;
-    
-    const styleSheet = document.createElement('style');
-    styleSheet.textContent = modalStyles;
-    document.head.appendChild(styleSheet);
-  };
-  
+  // Custom modal functions - simplified as styles are now in HTML
   const showConfirmDialog = (title, message) => {
     return new Promise((resolve) => {
-      const modal = document.getElementById('customModal');
+      // Create modal elements if they don't exist (first run)
+      let modal = document.getElementById('customModal');
       if (!modal) {
-        createCustomModal();
-        return showConfirmDialog(title, message);
+        modal = document.createElement('div');
+        modal.id = 'customModal';
+        modal.className = 'confirmation-dialog'; // Use the new class
+        modal.innerHTML = `
+          <div class="confirmation-content">
+            <div class="modal-header"><h3 id="modalTitle"></h3></div>
+            <div class="modal-body"><p id="modalMessage"></p></div>
+            <div class="confirmation-buttons">
+              <button id="modalCancel" class="cancel-btn">Cancel</button>
+              <button id="modalConfirm" class="confirm-btn">Confirm</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
       }
       
       document.getElementById('modalTitle').textContent = title;
       document.getElementById('modalMessage').textContent = message;
-      modal.style.display = 'flex';
+      modal.style.display = 'flex'; // Show the modal
       
       const confirmBtn = document.getElementById('modalConfirm');
       const cancelBtn = document.getElementById('modalCancel');
@@ -146,7 +109,7 @@ document.addEventListener('DOMContentLoaded', function() {
       setTimeout(() => confirmBtn.focus(), 100);
       
       const cleanup = () => {
-        modal.style.display = 'none';
+        modal.style.display = 'none'; // Hide the modal
         confirmBtn.removeEventListener('click', handleConfirm);
         cancelBtn.removeEventListener('click', handleCancel);
         modal.removeEventListener('click', handleOverlayClick);
@@ -173,7 +136,7 @@ document.addEventListener('DOMContentLoaded', function() {
     sendMessageSafely({ action: "getBlockedUsers" }, (response) => {
       const blockedUsers = response?.blockedUsers || [];
       displayUsers(blockedUsers);
-      updateCount(blockedUsers.length);
+      // Removed updateCount as userCount span is removed from HTML
     });
   };
   
@@ -292,27 +255,25 @@ document.addEventListener('DOMContentLoaded', function() {
   // Display functions
   const displayUsers = (users) => {
     if (users.length === 0) {
-      elements.userList.innerHTML = '<div class="empty-message">No blocked users yet</div>';
+      elements.blockedUsersList.innerHTML = '<div class="empty-state">No blocked users yet</div>';
       return;
     }
     
-    elements.userList.innerHTML = users.map(username => `
-      <div class="user-item">
+    elements.blockedUsersList.innerHTML = users.map(username => `
+      <div class="blocked-user">
         <span class="username" title="${escapeHtml(username)}">${escapeHtml(username)}</span>
-        <button class="remove-btn" data-username="${escapeHtml(username)}" title="Unblock this user">×</button>
+        <button class="unblock-btn" data-username="${escapeHtml(username)}" title="Unblock this user">Unblock</button>
       </div>
     `).join('');
     
-    elements.userList.querySelectorAll('.remove-btn').forEach(btn => {
+    elements.blockedUsersList.querySelectorAll('.unblock-btn').forEach(btn => {
       btn.addEventListener('click', function() {
         removeUser(this.dataset.username);
       });
     });
   };
   
-  const updateCount = (count) => {
-    elements.userCount.textContent = count;
-  };
+  // Removed updateCount function as userCount span is removed from HTML
   
   // User management functions
   const addUser = (username) => {
@@ -363,7 +324,7 @@ document.addEventListener('DOMContentLoaded', function() {
   };
   
   // Event listeners
-  elements.addBtn.addEventListener('click', () => addUser(elements.usernameInput.value));
+  elements.addUserBtn.addEventListener('click', () => addUser(elements.usernameInput.value)); // Changed from addBtn
   elements.usernameInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') addUser(elements.usernameInput.value);
   });
@@ -379,5 +340,4 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Initialize
   loadBlockedUsers();
-  createCustomModal();
 });
