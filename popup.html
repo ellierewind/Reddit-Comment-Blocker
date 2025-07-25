@@ -120,8 +120,8 @@
     /* Import/Export styles */
     #importExport {
       margin-top: 15px;
-      padding-top: 15px;
-      border-top: 1px solid #2f2f35;
+      padding-bottom: 15px; /* Added padding-bottom for the divider */
+      border-bottom: 1px solid #2f2f35; /* Changed to border-bottom for the divider */
       text-align: center;
     }
     
@@ -244,15 +244,15 @@
     <input type="text" id="usernameInput" placeholder="Enter username to block" class="username-input">
     <button id="addUserBtn" class="add-user-btn">Block User</button>
   </div>
-  
-  <div id="blockedUsersList">
-    <div class="empty-state">No blocked users yet</div>
-  </div>
-  
+
   <div id="importExport">
     <button id="exportBtn" class="import-export-btn">Export Blocked Users</button>
     <button id="importBtn" class="import-export-btn">Import Blocked Users</button>
     <input type="file" id="fileInput" accept=".json,.txt">
+  </div>
+  
+  <div id="blockedUsersList">
+    <div class="empty-state">No blocked users yet</div>
   </div>
   
   <div id="notification" class="notification hidden"></div>
