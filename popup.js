@@ -1,14 +1,13 @@
-// Optimized Popup script for Reddit Comment Blocker
+// Enhanced Popup script for Reddit Comment Blocker with chunked storage
 document.addEventListener('DOMContentLoaded', function() {
   const elements = {
     usernameInput: document.getElementById('usernameInput'),
-    addUserBtn: document.getElementById('addUserBtn'), // Changed from addBtn
-    blockedUsersList: document.getElementById('blockedUsersList'), // Changed from userList
-    userCount: document.getElementById('userCount'), // This span is removed from HTML, but keeping for now if it's used elsewhere. Will remove if not.
+    addUserBtn: document.getElementById('addUserBtn'),
+    blockedUsersList: document.getElementById('blockedUsersList'),
     exportBtn: document.getElementById('exportBtn'),
     importBtn: document.getElementById('importBtn'),
     fileInput: document.getElementById('fileInput'),
-    notification: document.getElementById('notification') // Added notification element
+    notification: document.getElementById('notification')
   };
   
   // Helper functions
@@ -64,28 +63,24 @@ document.addEventListener('DOMContentLoaded', function() {
     return div.innerHTML;
   };
   
-  // Refactored showMessage to use the new notification element
   const showMessage = (message, type = 'info') => {
     const notification = elements.notification;
     notification.textContent = message;
-    // Remove previous type classes and add the new one
-    notification.className = `notification ${type}`; 
-    notification.classList.remove('hidden'); // Ensure it's visible
+    notification.className = `notification ${type}`;
+    notification.classList.remove('hidden');
     
     setTimeout(() => {
-      notification.classList.add('hidden'); // Hide after 3 seconds
-    }, 3000);
+      notification.classList.add('hidden');
+    }, 4000); // Show for 4 seconds for import messages
   };
   
-  // Custom modal functions - simplified as styles are now in HTML
   const showConfirmDialog = (title, message) => {
     return new Promise((resolve) => {
-      // Create modal elements if they don't exist (first run)
       let modal = document.getElementById('customModal');
       if (!modal) {
         modal = document.createElement('div');
         modal.id = 'customModal';
-        modal.className = 'confirmation-dialog'; // Use the new class
+        modal.className = 'confirmation-dialog';
         modal.innerHTML = `
           <div class="confirmation-content">
             <div class="modal-header"><h3 id="modalTitle"></h3></div>
@@ -101,7 +96,7 @@ document.addEventListener('DOMContentLoaded', function() {
       
       document.getElementById('modalTitle').textContent = title;
       document.getElementById('modalMessage').textContent = message;
-      modal.style.display = 'flex'; // Show the modal
+      modal.style.display = 'flex';
       
       const confirmBtn = document.getElementById('modalConfirm');
       const cancelBtn = document.getElementById('modalCancel');
@@ -109,7 +104,7 @@ document.addEventListener('DOMContentLoaded', function() {
       setTimeout(() => confirmBtn.focus(), 100);
       
       const cleanup = () => {
-        modal.style.display = 'none'; // Hide the modal
+        modal.style.display = 'none';
         confirmBtn.removeEventListener('click', handleConfirm);
         cancelBtn.removeEventListener('click', handleCancel);
         modal.removeEventListener('click', handleOverlayClick);
@@ -136,11 +131,20 @@ document.addEventListener('DOMContentLoaded', function() {
     sendMessageSafely({ action: "getBlockedUsers" }, (response) => {
       const blockedUsers = response?.blockedUsers || [];
       displayUsers(blockedUsers);
-      // Removed updateCount as userCount span is removed from HTML
+      updateUserCountInTitle(blockedUsers.length);
     });
   };
+
+  const updateUserCountInTitle = (count) => {
+    const title = document.querySelector('h2');
+    if (count > 0) {
+      title.textContent = `Reddit Comment Blocker (${count})`;
+    } else {
+      title.textContent = 'Reddit Comment Blocker';
+    }
+  };
   
-  // Export/Import functions
+  // Export function (unchanged)
   const exportBlockedUsers = () => {
     sendMessageSafely({ action: "getBlockedUsers" }, (response) => {
       const blockedUsers = response?.blockedUsers || [];
@@ -172,6 +176,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   };
   
+  // Enhanced import function using new message type
   const importBlockedUsers = (file) => {
     const reader = new FileReader();
     
@@ -200,45 +205,26 @@ document.addEventListener('DOMContentLoaded', function() {
           return;
         }
         
-        sendMessageSafely({ action: "getBlockedUsers" }, (response) => {
-          const currentUsers = response?.blockedUsers || [];
-          const newUsers = usersToImport.filter(username => 
-            !currentUsers.includes(username.trim())
-          );
-          
-          if (newUsers.length === 0) {
-            showMessage(`All ${usersToImport.length} users were already blocked`, 'info');
-            return;
-          }
-          
-          const mergedUsers = [...currentUsers, ...newUsers];
-          
-          try {
-            chrome.storage.sync.set({ blockedUsers: mergedUsers }, () => {
-              if (chrome.runtime.lastError) {
-                console.warn('Failed to save imported users:', chrome.runtime.lastError.message);
-                showMessage('Failed to import users', 'error');
-                return;
+        // Use the new importBlockedUsers message type
+        sendMessageSafely({ action: "importBlockedUsers", users: usersToImport }, (response) => {
+          if (response?.success) {
+            const { imported, duplicates, total } = response;
+            let message = `Import complete! Added ${imported} new users`;
+            if (duplicates > 0) {
+              message += ` (${duplicates} duplicates skipped)`;
+            }
+            message += `. Total blocked users: ${total}`;
+            
+            showMessage(message, 'success');
+            loadBlockedUsers();
+            
+            getCurrentTab((tab) => {
+              if (isRedditPage(tab)) {
+                sendMessageToContentScript(tab.id, { action: "refreshBlocking" });
               }
-              
-              const duplicateCount = usersToImport.length - newUsers.length;
-              let message = `Imported ${newUsers.length} new blocked users`;
-              if (duplicateCount > 0) {
-                message += ` (${duplicateCount} duplicates skipped)`;
-              }
-              
-              showMessage(message, 'success');
-              loadBlockedUsers();
-              
-              getCurrentTab((tab) => {
-                if (isRedditPage(tab)) {
-                  sendMessageToContentScript(tab.id, { action: "refreshBlocking" });
-                }
-              });
             });
-          } catch (error) {
-            console.warn('Failed to save imported users:', error);
-            showMessage('Failed to import users', 'error');
+          } else {
+            showMessage(response?.reason || 'Failed to import users', 'error');
           }
         });
         
@@ -259,7 +245,10 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     
-    elements.blockedUsersList.innerHTML = users.map(username => `
+    // Sort users alphabetically for better organization
+    const sortedUsers = [...users].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    
+    elements.blockedUsersList.innerHTML = sortedUsers.map(username => `
       <div class="blocked-user">
         <span class="username" title="${escapeHtml(username)}">${escapeHtml(username)}</span>
         <button class="unblock-btn" data-username="${escapeHtml(username)}" title="Unblock this user">Unblock</button>
@@ -273,8 +262,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   };
   
-  // Removed updateCount function as userCount span is removed from HTML
-  
   // User management functions
   const addUser = (username) => {
     if (!username.trim()) {
@@ -282,7 +269,13 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     
+    elements.addUserBtn.disabled = true;
+    elements.addUserBtn.textContent = 'Adding...';
+    
     sendMessageSafely({ action: "addBlockedUser", username: username.trim() }, (response) => {
+      elements.addUserBtn.disabled = false;
+      elements.addUserBtn.textContent = 'Block User';
+      
       if (response?.success) {
         showMessage(`Blocked "${username}"`, 'success');
         elements.usernameInput.value = '';
@@ -324,7 +317,7 @@ document.addEventListener('DOMContentLoaded', function() {
   };
   
   // Event listeners
-  elements.addUserBtn.addEventListener('click', () => addUser(elements.usernameInput.value)); // Changed from addBtn
+  elements.addUserBtn.addEventListener('click', () => addUser(elements.usernameInput.value));
   elements.usernameInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') addUser(elements.usernameInput.value);
   });
