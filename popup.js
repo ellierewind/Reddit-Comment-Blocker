@@ -131,17 +131,7 @@ document.addEventListener('DOMContentLoaded', function() {
     sendMessageSafely({ action: "getBlockedUsers" }, (response) => {
       const blockedUsers = response?.blockedUsers || [];
       displayUsers(blockedUsers);
-      updateUserCountInTitle(blockedUsers.length);
     });
-  };
-
-  const updateUserCountInTitle = (count) => {
-    const title = document.querySelector('h2');
-    if (count > 0) {
-      title.textContent = `Reddit Comment Blocker (${count})`;
-    } else {
-      title.textContent = 'Reddit Comment Blocker';
-    }
   };
   
   // Export function (unchanged)
