@@ -1,25 +1,26 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <meta charset="utf-8">
   <style>
     body {
-      width: 300px;
+      width: 320px;
       padding: 15px;
       font-family: "Roobert", "Helvetica Neue", Helvetica, Arial, sans-serif;
       font-size: 14px;
-      background: #0e0e10; /* Dark background from Twitch */
-      color: #efeff1; /* Light text color from Twitch */
+      background: #0e0e10;
+      color: #efeff1;
       margin: 0;
     }
-    
+
     h2 {
       margin: 0 0 15px 0;
-      color: #FF4500; /* Reddit Orange-Red */
+      color: #FF4500;
       font-size: 16px;
       text-align: center;
     }
-    
+
     .instructions {
       background: #1f1f23;
       padding: 10px;
@@ -29,13 +30,123 @@
       line-height: 1.4;
     }
 
-    /* Manual add section styles */
+    .pattern-help {
+      background: #1f1f23;
+      border: 1px solid #2f2f35;
+      border-radius: 5px;
+      padding: 10px;
+      margin-bottom: 15px;
+      font-size: 12px;
+    }
+
+    .pattern-help h4 {
+      margin: 0 0 8px 0;
+      color: #FF4500;
+      font-size: 13px;
+    }
+
+    .pattern-examples {
+      margin-top: 8px;
+    }
+
+    .pattern-examples div {
+      margin: 3px 0;
+      font-family: monospace;
+      font-size: 11px;
+    }
+
+    .pattern-examples .example {
+      color: #4CAF50;
+    }
+
+    .pattern-examples .description {
+      color: #adadb8;
+      margin-left: 10px;
+    }
+
+    .settings {
+      background: #1f1f23;
+      border: 1px solid #2f2f35;
+      border-radius: 5px;
+      padding: 12px;
+      margin-bottom: 15px;
+    }
+
+    .setting-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .setting-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .setting-label {
+      font-size: 13px;
+      color: #efeff1;
+      flex: 1;
+      margin-right: 10px;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #444;
+      transition: 0.3s;
+      border-radius: 24px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.3s;
+      border-radius: 50%;
+    }
+
+    input:checked+.slider {
+      background-color: #FF4500;
+    }
+
+    input:checked+.slider:before {
+      transform: translateX(20px);
+    }
+
+    .setting-description {
+      font-size: 11px;
+      color: #adadb8;
+      margin-top: 4px;
+      line-height: 1.3;
+    }
+
     .manual-add-section {
       margin-bottom: 15px;
       padding-bottom: 15px;
       border-bottom: 1px solid #2f2f35;
     }
-    
+
     .username-input {
       width: 100%;
       background: #1f1f23;
@@ -47,18 +158,18 @@
       margin-bottom: 8px;
       box-sizing: border-box;
     }
-    
+
     .username-input:focus {
       outline: none;
-      border-color: #FF4500; /* Reddit Orange-Red */
+      border-color: #FF4500;
     }
-    
+
     .username-input::placeholder {
       color: #adadb8;
     }
-    
+
     .add-user-btn {
-      background: #FF4500; /* Reddit Orange-Red */
+      background: #FF4500;
       color: white;
       border: none;
       padding: 8px 12px;
@@ -67,11 +178,11 @@
       font-size: 12px;
       width: 100%;
     }
-    
+
     .add-user-btn:hover {
-      background: #CC3700; /* Darker Reddit Orange-Red */
+      background: #e03e00;
     }
-    
+
     .add-user-btn:disabled {
       background: #444;
       cursor: not-allowed;
@@ -84,49 +195,57 @@
       padding: 8px 0;
       border-bottom: 1px solid #2f2f35;
     }
-    
+
     .blocked-user:last-child {
       border-bottom: none;
     }
-    
+
     .username {
       font-weight: 500;
       font-size: 13px;
       color: #efeff1;
       flex: 1;
       word-break: break-all;
+      font-family: monospace;
     }
-    
+
+    .pattern-indicator {
+      font-size: 11px;
+      color: #ff9500;
+      margin-left: 5px;
+      opacity: 0.7;
+    }
+
     .unblock-btn {
-      background: #ff2121;
+      background: #FF4500;
       color: white;
       border: none;
       padding: 4px 8px;
       border-radius: 3px;
       cursor: pointer;
       font-size: 12px;
+      margin-left: 8px;
     }
-    
+
     .unblock-btn:hover {
-      background: #c61616;
+      background: #e03e00;
     }
-    
+
     .empty-state {
       text-align: center;
       color: #adadb8;
       padding: 20px 0;
     }
 
-    /* Import/Export styles */
     #importExport {
       margin-top: 15px;
-      padding-bottom: 15px; /* Added padding-bottom for the divider */
-      border-bottom: 1px solid #2f2f35; /* Changed to border-bottom for the divider */
+      padding-bottom: 15px;
+      border-bottom: 1px solid #2f2f35;
       text-align: center;
     }
-    
+
     .import-export-btn {
-      background: #FF4500; /* Reddit Orange-Red */
+      background: #FF4500;
       color: white;
       border: none;
       padding: 6px 10px;
@@ -136,22 +255,21 @@
       margin-right: 5px;
       margin-bottom: 5px;
     }
-    
+
     .import-export-btn:hover {
-      background: #CC3700; /* Darker Reddit Orange-Red */
+      background: #e03e00;
     }
 
     #fileInput {
       display: none;
     }
 
-    /* Notification styles */
     .notification {
       position: fixed;
       top: 10px;
       left: 50%;
       transform: translateX(-50%);
-      background: #FF4500; /* Reddit Orange-Red */
+      background: #FF4500;
       color: white;
       padding: 10px 15px;
       border-radius: 5px;
@@ -159,22 +277,23 @@
       z-index: 1000;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
       transition: opacity 0.3s ease;
+      max-width: 280px;
+      word-wrap: break-word;
     }
-    
+
     .notification.success {
       background: #00c851;
     }
-    
+
     .notification.error {
       background: #ff4444;
     }
-    
+
     .notification.hidden {
       opacity: 0;
       pointer-events: none;
     }
 
-    /* Confirmation Dialog styles */
     .confirmation-dialog {
       position: fixed;
       top: 0;
@@ -187,7 +306,7 @@
       align-items: center;
       z-index: 1001;
     }
-    
+
     .confirmation-content {
       background: #1f1f23;
       padding: 20px;
@@ -196,14 +315,14 @@
       min-width: 200px;
       text-align: center;
     }
-    
+
     .confirmation-buttons {
       margin-top: 15px;
       display: flex;
       gap: 10px;
       justify-content: center;
     }
-    
+
     .confirm-btn {
       background: #ff6b6b;
       color: white;
@@ -213,7 +332,7 @@
       cursor: pointer;
       font-size: 12px;
     }
-    
+
     .cancel-btn {
       background: #444;
       color: white;
@@ -223,25 +342,43 @@
       cursor: pointer;
       font-size: 12px;
     }
-    
+
     .confirm-btn:hover {
       background: #ff5252;
     }
-    
+
     .cancel-btn:hover {
       background: #555;
     }
   </style>
 </head>
+
 <body>
   <h2>Reddit Comment Blocker</h2>
-  
+
   <div class="instructions">
-    Right-click on usernames and select "Block this user's comments". Or manually add usernames below.
+    Right-click on a Reddit username and select "Block this user's comments". Or manually add a username (e.g.
+    "someuser") below.
   </div>
-  
+
+  <div class="section">
+    <h3>Settings</h3>
+    <div class="settings">
+      <div class="setting-item">
+        <div>
+          <div class="setting-label">Show blocked comment placeholders</div>
+          <div class="setting-description">Display a message where blocked comments would appear</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="showPlaceholders">
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+  </div>
+
   <div class="manual-add-section">
-    <input type="text" id="usernameInput" placeholder="Enter username to block" class="username-input">
+    <input type="text" id="usernameInput" placeholder="Enter Reddit username..." class="username-input">
     <button id="addUserBtn" class="add-user-btn">Block User</button>
   </div>
 
@@ -250,13 +387,14 @@
     <button id="importBtn" class="import-export-btn">Import Blocked Users</button>
     <input type="file" id="fileInput" accept=".json,.txt">
   </div>
-  
+
   <div id="blockedUsersList">
     <div class="empty-state">No blocked users yet</div>
   </div>
-  
+
   <div id="notification" class="notification hidden"></div>
-  
+
   <script src="popup.js"></script>
 </body>
+
 </html>

@@ -1,32 +1,50 @@
-// Enhanced Popup script for Reddit Comment Blocker with chunked storage
-document.addEventListener('DOMContentLoaded', function() {
+// Enhanced Popup script for Reddit Comment Blocker with pattern matching support (Local Storage)
+document.addEventListener('DOMContentLoaded', function () {
   const elements = {
     usernameInput: document.getElementById('usernameInput'),
     addUserBtn: document.getElementById('addUserBtn'),
     blockedUsersList: document.getElementById('blockedUsersList'),
+    showPlaceholdersToggle: document.getElementById('showPlaceholders'),
     exportBtn: document.getElementById('exportBtn'),
     importBtn: document.getElementById('importBtn'),
     fileInput: document.getElementById('fileInput'),
     notification: document.getElementById('notification')
   };
-  
+
+  let currentPatternCount = 0;
+
+  // Pattern validation (client-side)
+  const validatePattern = (pattern) => {
+    if (!pattern || typeof pattern !== 'string') {
+      return { valid: false, reason: 'Pattern must be a non-empty string' };
+    }
+
+    // Trim and normalize to NFC for consistent Unicode handling
+    const trimmed = pattern.trim().normalize('NFC');
+    if (trimmed.length === 0) {
+      return { valid: false, reason: 'Pattern cannot be empty' };
+    }
+
+    return { valid: true, pattern: trimmed };
+  };
+
   // Helper functions
   const sendMessageSafely = (message, callback) => {
     try {
       chrome.runtime.sendMessage(message, (response) => {
         if (chrome.runtime.lastError) {
           console.warn('Chrome runtime error:', chrome.runtime.lastError.message);
-          callback?.({ blockedUsers: [] });
+          callback?.({ blockedUsers: [], totalUsers: 0 });
           return;
         }
         callback?.(response);
       });
     } catch (error) {
       console.warn('Failed to send message:', error);
-      callback?.({ blockedUsers: [] });
+      callback?.({ blockedUsers: [], totalUsers: 0 });
     }
   };
-  
+
   const sendMessageToContentScript = (tabId, message) => {
     if (!tabId) return;
     try {
@@ -39,10 +57,10 @@ document.addEventListener('DOMContentLoaded', function() {
       console.debug('Failed to send message to content script:', error);
     }
   };
-  
+
   const getCurrentTab = (callback) => {
     try {
-      chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (chrome.runtime.lastError) {
           console.warn('Failed to query tabs:', chrome.runtime.lastError.message);
           callback(null);
@@ -55,25 +73,31 @@ document.addEventListener('DOMContentLoaded', function() {
       callback(null);
     }
   };
-  
+
   const isRedditPage = (tab) => tab?.url?.includes('reddit.com');
-  const escapeHtml = (text) => { 
+  const escapeHtml = (text) => {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
   };
-  
+
   const showMessage = (message, type = 'info') => {
     const notification = elements.notification;
     notification.textContent = message;
     notification.className = `notification ${type}`;
     notification.classList.remove('hidden');
-    
+
     setTimeout(() => {
       notification.classList.add('hidden');
-    }, 4000); // Show for 4 seconds for import messages
+    }, 4000); // Longer timeout for pattern messages
   };
-  
+
+  // Check if pattern contains wildcards
+  const isWildcardPattern = (pattern) => {
+    return pattern.includes('*') || pattern.includes('?');
+  };
+
+  // Custom modal functions
   const showConfirmDialog = (title, message) => {
     return new Promise((resolve) => {
       let modal = document.getElementById('customModal');
@@ -93,16 +117,16 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
         document.body.appendChild(modal);
       }
-      
+
       document.getElementById('modalTitle').textContent = title;
       document.getElementById('modalMessage').textContent = message;
       modal.style.display = 'flex';
-      
+
       const confirmBtn = document.getElementById('modalConfirm');
       const cancelBtn = document.getElementById('modalCancel');
-      
+
       setTimeout(() => confirmBtn.focus(), 100);
-      
+
       const cleanup = () => {
         modal.style.display = 'none';
         confirmBtn.removeEventListener('click', handleConfirm);
@@ -110,7 +134,7 @@ document.addEventListener('DOMContentLoaded', function() {
         modal.removeEventListener('click', handleOverlayClick);
         document.removeEventListener('keydown', handleKeydown);
       };
-      
+
       const handleConfirm = () => { cleanup(); resolve(true); };
       const handleCancel = () => { cleanup(); resolve(false); };
       const handleOverlayClick = (e) => { if (e.target === modal) { cleanup(); resolve(false); } };
@@ -118,96 +142,140 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.key === 'Escape') { cleanup(); resolve(false); }
         else if (e.key === 'Enter') { cleanup(); resolve(true); }
       };
-      
+
       confirmBtn.addEventListener('click', handleConfirm);
       cancelBtn.addEventListener('click', handleCancel);
       modal.addEventListener('click', handleOverlayClick);
       document.addEventListener('keydown', handleKeydown);
     });
   };
-  
+
   // Data management functions
   const loadBlockedUsers = () => {
     sendMessageSafely({ action: "getBlockedUsers" }, (response) => {
-      const blockedUsers = response?.blockedUsers || [];
-      displayUsers(blockedUsers);
+      const blockedPatterns = response?.blockedUsers || [];
+      currentPatternCount = response?.totalUsers || blockedPatterns.length;
+      displayPatterns(blockedPatterns);
     });
   };
-  
-  // Export function (unchanged)
+
+  const loadSettings = () => {
+    try {
+      chrome.storage.local.get(["showPlaceholders"], (result) => {
+        if (chrome.runtime.lastError) {
+          console.warn('Failed to load settings:', chrome.runtime.lastError.message);
+          elements.showPlaceholdersToggle.checked = true;
+          return;
+        }
+        elements.showPlaceholdersToggle.checked = result.showPlaceholders !== false;
+      });
+    } catch (error) {
+      console.warn('Failed to load settings:', error);
+      elements.showPlaceholdersToggle.checked = true;
+    }
+  };
+
+  const saveSettings = () => {
+    const showPlaceholders = elements.showPlaceholdersToggle.checked;
+
+    try {
+      chrome.storage.local.set({ showPlaceholders }, () => {
+        if (chrome.runtime.lastError) {
+          console.warn('Failed to save settings:', chrome.runtime.lastError.message);
+          return;
+        }
+
+        getCurrentTab((tab) => {
+          if (isRedditPage(tab)) {
+            sendMessageToContentScript(tab.id, {
+              action: "settingsChanged",
+              showPlaceholders: showPlaceholders
+            });
+          }
+        });
+      });
+    } catch (error) {
+      console.warn('Failed to save settings:', error);
+    }
+  };
+
+  // Export/Import functions
   const exportBlockedUsers = () => {
     sendMessageSafely({ action: "getBlockedUsers" }, (response) => {
-      const blockedUsers = response?.blockedUsers || [];
-      
-      if (blockedUsers.length === 0) {
+      const blockedPatterns = response?.blockedUsers || [];
+
+      if (blockedPatterns.length === 0) {
         showMessage('No blocked users to export', 'info');
         return;
       }
-      
+
       const exportData = {
         extension: "Reddit Comment Blocker",
-        version: "1.0",
+        version: "2.0",
         exportDate: new Date().toISOString(),
-        blockedUsers
+        totalUsers: blockedPatterns.length,
+        blockedUsers: blockedPatterns
       };
-      
+
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
-      
+
       const a = document.createElement('a');
       a.href = url;
       a.download = `reddit-blocked-users-${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      
+
       URL.revokeObjectURL(url);
-      showMessage(`Exported ${blockedUsers.length} blocked users`, 'success');
+      showMessage(`Exported ${blockedPatterns.length} blocked users`, 'success');
     });
   };
-  
-  // Enhanced import function using new message type
+
   const importBlockedUsers = (file) => {
     const reader = new FileReader();
-    
-    reader.onload = function(e) {
+
+    reader.onload = function (e) {
       try {
-        let usersToImport = [];
-        
+        let patternsToImport = [];
+
         try {
           const importData = JSON.parse(e.target.result);
-          usersToImport = importData.blockedUsers && Array.isArray(importData.blockedUsers) 
-            ? importData.blockedUsers 
+          patternsToImport = importData.blockedUsers && Array.isArray(importData.blockedUsers)
+            ? importData.blockedUsers
             : (Array.isArray(importData) ? importData : []);
         } catch {
           // Parse as plain text
-          usersToImport = e.target.result.split('\n')
+          patternsToImport = e.target.result.split('\n')
             .map(line => line.trim())
             .filter(line => line.length > 0);
         }
-        
-        usersToImport = usersToImport.filter(username => 
-          typeof username === 'string' && username.trim().length > 0
-        );
-        
-        if (usersToImport.length === 0) {
+
+        // Clean and validate patterns
+        patternsToImport = patternsToImport
+          .filter(pattern => typeof pattern === 'string' && pattern.trim().length > 0)
+          .map(pattern => pattern.trim());
+
+        if (patternsToImport.length === 0) {
           showMessage('No valid usernames found in file', 'error');
           return;
         }
-        
-        // Use the new importBlockedUsers message type
-        sendMessageSafely({ action: "importBlockedUsers", users: usersToImport }, (response) => {
+
+        sendMessageSafely({ action: "importBlockedUsers", users: patternsToImport }, (response) => {
           if (response?.success) {
-            const { imported, duplicates, total } = response;
-            let message = `Import complete! Added ${imported} new users`;
+            const { imported, duplicates, invalid, totalUsers } = response;
+            let message = `Import completed: ${imported} new users added`;
             if (duplicates > 0) {
-              message += ` (${duplicates} duplicates skipped)`;
+              message += `, ${duplicates} duplicates skipped`;
             }
-            message += `. Total blocked users: ${total}`;
-            
+            if (invalid > 0) {
+              message += `, ${invalid} invalid entries skipped`;
+            }
+            message += `. Total: ${totalUsers} blocked users.`;
+
             showMessage(message, 'success');
             loadBlockedUsers();
-            
+
             getCurrentTab((tab) => {
               if (isRedditPage(tab)) {
                 sendMessageToContentScript(tab.id, { action: "refreshBlocking" });
@@ -217,60 +285,60 @@ document.addEventListener('DOMContentLoaded', function() {
             showMessage(response?.reason || 'Failed to import users', 'error');
           }
         });
-        
+
       } catch (error) {
         console.error('Import error:', error);
         showMessage('Failed to import file. Please check the file format.', 'error');
       }
     };
-    
+
     reader.onerror = () => showMessage('Failed to read file', 'error');
     reader.readAsText(file);
   };
-  
+
   // Display functions
-  const displayUsers = (users) => {
-    if (users.length === 0) {
-      elements.blockedUsersList.innerHTML = '<div class="empty-state">No blocked users yet</div>';
+  const displayPatterns = (patterns) => {
+    if (patterns.length === 0) {
+      elements.blockedUsersList.innerHTML = '<div class="empty-state">No blocked patterns yet</div>';
       return;
     }
-    
-    // Sort users alphabetically for better organization
-    const sortedUsers = [...users].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-    
-    elements.blockedUsersList.innerHTML = sortedUsers.map(username => `
-      <div class="blocked-user">
-        <span class="username" title="${escapeHtml(username)}">${escapeHtml(username)}</span>
-        <button class="unblock-btn" data-username="${escapeHtml(username)}" title="Unblock this user">Unblock</button>
-      </div>
-    `).join('');
-    
+
+    elements.blockedUsersList.innerHTML = patterns.map(pattern => {
+      const isWildcard = isWildcardPattern(pattern);
+      return `
+        <div class="blocked-user">
+          <div>
+            <span class="username" title="${escapeHtml(pattern)}">${escapeHtml(pattern)}</span>
+            ${isWildcard ? '<span class="pattern-indicator">(pattern)</span>' : ''}
+          </div>
+          <button class="unblock-btn" data-pattern="${escapeHtml(pattern)}" title="Remove this pattern">Remove</button>
+        </div>
+      `;
+    }).join('');
+
     elements.blockedUsersList.querySelectorAll('.unblock-btn').forEach(btn => {
-      btn.addEventListener('click', function() {
-        removeUser(this.dataset.username);
+      btn.addEventListener('click', function () {
+        removePattern(this.dataset.pattern);
       });
     });
   };
-  
-  // User management functions
-  const addUser = (username) => {
-    if (!username.trim()) {
-      showMessage('Please enter a username', 'error');
+
+  // Pattern management functions
+  const addPattern = (pattern) => {
+    const validation = validatePattern(pattern);
+    if (!validation.valid) {
+      showMessage(validation.reason, 'error');
       return;
     }
-    
-    elements.addUserBtn.disabled = true;
-    elements.addUserBtn.textContent = 'Adding...';
-    
-    sendMessageSafely({ action: "addBlockedUser", username: username.trim() }, (response) => {
-      elements.addUserBtn.disabled = false;
-      elements.addUserBtn.textContent = 'Block User';
-      
+
+    const validatedPattern = validation.pattern;
+
+    sendMessageSafely({ action: "addBlockedUser", username: validatedPattern }, (response) => {
       if (response?.success) {
-        showMessage(`Blocked "${username}"`, 'success');
+        showMessage(`Blocked "${validatedPattern}" (Total: ${response.totalUsers})`, 'success');
         elements.usernameInput.value = '';
         loadBlockedUsers();
-        
+
         getCurrentTab((tab) => {
           if (isRedditPage(tab)) {
             sendMessageToContentScript(tab.id, { action: "refreshBlocking" });
@@ -281,19 +349,19 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   };
-  
-  const removeUser = async (username) => {
+
+  const removePattern = async (pattern) => {
     const confirmed = await showConfirmDialog(
       'Unblock User',
-      `Are you sure you want to unblock "${username}"? Their comments will be visible again.`
+      `Are you sure you want to unblock "${pattern}"? Their comments will be visible again.`
     );
-    
+
     if (confirmed) {
-      sendMessageSafely({ action: "removeBlockedUser", username }, (response) => {
+      sendMessageSafely({ action: "removeBlockedUser", username: pattern }, (response) => {
         if (response?.success) {
-          showMessage(`Unblocked "${username}"`, 'success');
+          showMessage(`Unblocked "${pattern}" (Total: ${response.totalUsers})`, 'success');
           loadBlockedUsers();
-          
+
           getCurrentTab((tab) => {
             if (isRedditPage(tab)) {
               sendMessageToContentScript(tab.id, { action: "refreshBlocking" });
@@ -305,22 +373,24 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }
   };
-  
+
   // Event listeners
-  elements.addUserBtn.addEventListener('click', () => addUser(elements.usernameInput.value));
+  elements.addUserBtn.addEventListener('click', () => addPattern(elements.usernameInput.value));
   elements.usernameInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') addUser(elements.usernameInput.value);
+    if (e.key === 'Enter') addPattern(elements.usernameInput.value);
   });
+  elements.showPlaceholdersToggle.addEventListener('change', saveSettings);
   elements.exportBtn.addEventListener('click', exportBlockedUsers);
   elements.importBtn.addEventListener('click', () => elements.fileInput.click());
   elements.fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (file) {
       importBlockedUsers(file);
-      elements.fileInput.value = ''; // Clear for reuse
+      elements.fileInput.value = '';
     }
   });
-  
+
   // Initialize
   loadBlockedUsers();
+  loadSettings();
 });

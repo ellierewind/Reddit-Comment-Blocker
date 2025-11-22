@@ -4,3 +4,31 @@
 .blocked-comment {
   display: none !important;
 }
+
+/* Placeholder for blocked comments */
+.blocked-placeholder {
+  padding: 8px 12px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: #818384;
+  font-size: 12px;
+  margin: 4px 0;
+  font-style: italic;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.blocked-placeholder::before {
+  content: "🚫";
+  font-style: normal;
+}
+
+/* Dark mode support */
+html[dark] .blocked-placeholder,
+[dark] .blocked-placeholder {
+  background-color: #272727 !important;
+  color: #aaa !important;
+  border-left-color: #555 !important;
+}

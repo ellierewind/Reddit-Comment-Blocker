@@ -1,11 +1,19 @@
 {
   "manifest_version": 3,
   "name": "Reddit Comment Blocker",
-  "version": "1.10",
+  "version": "2.0",
   "description": "Block comments from specific Reddit users",
-  "permissions": ["storage", "contextMenus", "activeTab"],
-  "host_permissions": ["*://*.reddit.com/*"],
-  "background": { "service_worker": "background.js" },
+  "permissions": [
+    "storage",
+    "contextMenus",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "*://*.reddit.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": ["*://*.reddit.com/*"],
@@ -14,5 +22,8 @@
       "run_at": "document_start"
     }
   ],
-  "action": { "default_popup": "popup.html" }
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Reddit Comment Blocker"
+  }
 }
